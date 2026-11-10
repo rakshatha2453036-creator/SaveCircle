@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SaveCircle</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@32.3.3/styles/ag-grid.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@32.3.3/styles/ag-theme-quartz.css">
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-community@32.3.3/dist/ag-grid-community.min.js"></script>
+<style>
+ body{font-family:system-ui,sans-serif;margin:0;background:#f5f7fa;color:#1a2233}
+ header{background:#003087;color:#fff;padding:14px 24px;font-size:20px;font-weight:600}
+ header small{font-weight:400;opacity:.8;margin-left:10px}
+ main{display:grid;grid-template-columns:1fr 1.4fr;gap:16px;padding:16px;height:calc(100vh - 80px)}
+ .card{background:#fff;border-radius:12px;padding:14px;box-shadow:0 1px 4px #0001;display:flex;flex-direction:column;min-height:0}
+ #log{flex:1;overflow:auto;display:flex;flex-direction:column;gap:8px}
+ .m{padding:8px 12px;border-radius:10px;max-width:92%;white-space:pre-wrap}
+ .u{background:#0070e0;color:#fff;align-self:flex-end}.a{background:#eef1f6}
+ .prop{border:2px solid #ffc439;background:#fffbea}
+ button{background:#0070e0;color:#fff;border:0;border-radius:8px;padding:8px 12px;cursor:pointer;font-weight:600}
+ button.g{background:#2e7d32}button.no{background:#999}button:disabled{opacity:.5}
+ form{display:flex;gap:8px;margin-top:10px}input{flex:1;padding:10px;border:1px solid #ccd;border-radius:8px}
+ .bar{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+ #grid{height:230px}#aud{flex:1;overflow:auto;font-size:12px;margin-top:8px;border-top:1px solid #eee;padding-top:6px}
+ #aud div{padding:3px 0;border-bottom:1px solid #f1f1f1}
+ .hi{display:inline-block;padding:2px 8px;border-radius:10px;font-weight:600}
+ @media(max-width:800px){main{grid-template-columns:1fr;height:auto}#log{height:380px}}
+</style></head><body>
+<header>SaveCircle <small>AI treasurer for community savings circles · powered by PayPal</small></header>
+<main>
+ <div class="card"><div id="log"></div>
+  <form id="f"><input id="q" placeholder="Ask: who is risky? propose a safer order. Arun will be 5 days late..." autocomplete="off"><button>Send</button></form></div>
+ <div class="card">
+  <h3 id="title" style="margin:0">Loading...</h3><div id="sub" style="color:#556;font-size:14px"></div>
+  <div class="bar">
+   <button onclick="act('/api/draw')">1 · Draw order (seeded)</button>
+   <button onclick="act('/api/collect')">2 · Collect round (PayPal invoices)</button>
+   <button class="g" onclick="act('/api/payout')">3 · Pay out pot (PayPal Payouts)</button>
+   <button class="no" onclick="if(confirm('Reset demo?'))act('/api/reset')">Reset</button></div>
+  <div id="grid" class="ag-theme-quartz"></div>
+  <b style="margin-top:8px">Audit log</b><div id="aud"></div>
+ </div>
+</main>
+<script>
+const log=document.getElementById('log'),hist=[];
+const add=(t,c)=>{const d=document.createElement('div');d.className='m '+c;d.textContent=t;log.append(d);log.scrollTop=1e9;return d};
+add("Hi, I'm your SaveCircle treasurer. Ask me who is likely to pay late, ask for a fairer payout order, or tell me about a delay and I'll draft a kind message.",'a');
+
+const grid=agGrid.createGrid(document.getElementById('grid'),{
+ columnDefs:[
+  {field:'turn',headerName:'Turn',width:80,sort:'asc'},
+  {field:'name',width:100},
+  {field:'history',flex:1},
+  {field:'risk',headerName:'Risk',width:85,cellRenderer:p=>{const c=p.value>40?'#fdd':p.value>20?'#ffe9b3':'#d9f3dc';return `<span class="hi" style="background:${c}">${p.value}%</span>`}},
+  {field:'confidence',headerName:'Confidence',width:110},
+  {field:'status',headerName:'This round',width:110},
+  {headerName:'',width:140,cellRenderer:p=>{if(!p.data.status||p.data.status==='PAID'||p.data.status==='-')return '';const b=document.createElement('button');b.textContent='Mark paid (demo)';b.style.padding='3px 8px';b.onclick=()=>act('/api/markpaid/'+p.data.id);return b}}],
+ defaultColDef:{sortable:true},rowData:[]});
+
+function render(v){
+ document.getElementById('title').textContent=v.name;
+ document.getElementById('sub').textContent=v.complete?'Circle complete 🎉':`Round ${v.round}/${v.total} · ${v.currency} ${v.amount} each · pot ${v.currency} ${v.amount*v.total} · winner: ${v.winner||'not drawn yet'}`+(v.seed?` · seed ${v.seed}`:'');
+ grid.setGridOption('rowData',v.members);
+ document.getElementById('aud').innerHTML=v.audit.map(a=>`<div><b>${new Date(a.t).toLocaleTimeString()}</b> ${a.msg}</div>`).join('');
+}
+async function act(url){
+ const r=await fetch(url,{method:'POST'});const j=await r.json();
+ if(j.error)add('⚠️ '+j.error,'a');else render(j);
+}
+async function load(){try{const r=await fetch('/api/circle');const j=await r.json();if(!j.error)render(j)}catch{}}
+load();setInterval(load,15000);
+
+document.getElementById('f').onsubmit=async e=>{
+ e.preventDefault();const q=document.getElementById('q');const t=q.value.trim();if(!t)return;q.value='';
+ add(t,'u');hist.push({role:'user',content:t});const w=add('Thinking...','a');
+ const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:hist})});
+ const j=await r.json();w.remove();
+ if(j.error){add('Error: '+j.error,'a');return}
+ if(j.reply){add(j.reply,'a');hist.push({role:'assistant',content:j.reply})}
+ j.proposals.forEach(showProposal);load();
+};
+function showProposal(p){
+ const d=document.createElement('div');d.className='m a prop';
+ const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+ d.innerHTML=p.kind==='propose_order'?`<b>Proposed payout order</b><br>${esc((p.orderNames||p.order).join(' → '))}<br><i>${esc(p.reasoning)}</i><br><br>`
+  :`<b>Drafted message to ${esc(p.memberName||p.member_id)}</b><br>${esc(p.message)}<br><br>`;
+ const ok=document.createElement('button');ok.textContent='Approve';
+ const no=document.createElement('button');no.textContent='Reject';no.className='no';no.style.marginLeft='8px';
+ ok.onclick=async()=>{ok.disabled=true;const r=await fetch('/api/approve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
+  const j=await r.json();d.textContent=j.error?'❌ '+j.error:'✅ Approved and logged';load()};
+ no.onclick=()=>d.remove();d.append(ok,no);log.append(d);log.scrollTop=1e9;
+}
+</script></body></html>
