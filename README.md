@@ -3,7 +3,7 @@
 AI treasurer for community savings circles (chit funds, committees, tandas, susus), powered by PayPal.
 
 **Live demo:** https://savecircle-6zmp.onrender.com (free tier: first load may take ~60 seconds)
-**Demo video:** YOUR-YOUTUBE-URL
+**Demo video:** https://youtu.be/VloMVEXJ8ck?si=HIaMAsXu008e7z0y
 
 ## Problem
 Hundreds of millions of people save through rotating savings circles that run on WhatsApp groups, notebooks and cash. Late payers, disputes, and organizer fraud are common, and one default can collapse the circle.
